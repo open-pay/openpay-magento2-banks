@@ -9,6 +9,8 @@
 
 namespace Openpay\Banks\Model;
 
+use Magento\Store\Model\ScopeInterface;
+
 /**
  * Class Payment
  *
@@ -39,7 +41,13 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     protected $live_merchant_id;
     protected $live_sk;
     protected $pdf_url_base;
-    protected $supported_currency_codes = array('MXN');
+    protected $supported_currency_codes = array('MXN');    
+    protected $_transportBuilder;
+    protected $logger;
+    protected $_storeManager;
+    protected $_inlineTranslation;
+    protected $_directoryList;
+    protected $_file;
 
     /**
      * 
@@ -60,6 +68,12 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Magento\Payment\Helper\Data $paymentData, 
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
         \Magento\Payment\Model\Method\Logger $logger, 
+        \Openpay\Banks\Mail\Template\TransportBuilder $transportBuilder,
+        \Magento\Framework\Translate\Inline\StateInterface $inlineTranslation,
+        \Magento\Store\Model\StoreManagerInterface $storeManager,
+        \Psr\Log\LoggerInterface $logger_interface,
+        \Magento\Framework\App\Filesystem\DirectoryList $directoryList,
+        \Magento\Framework\Filesystem\Io\File $file,
         array $data = []
     ) {
         parent::__construct(
@@ -75,6 +89,12 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
             $data
         );
 
+        $this->_file = $file;
+        $this->_directoryList = $directoryList;
+        $this->logger = $logger_interface;
+        $this->_inlineTranslation = $inlineTranslation;        
+        $this->_storeManager = $storeManager;
+        $this->_transportBuilder = $transportBuilder;
         $this->scope_config = $scopeConfig;
 
         $this->is_active = $this->getConfigData('active');
@@ -83,7 +103,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         $this->sandbox_sk = $this->getConfigData('sandbox_sk');
         $this->live_merchant_id = $this->getConfigData('live_merchant_id');
         $this->live_sk = $this->getConfigData('live_sk');
-        $this->deadline = $this->getConfigData('deadline_hours');
+        $this->deadline = $this->getConfigData('deadline_hours');        
 
         $this->merchant_id = $this->is_sandbox ? $this->sandbox_merchant_id : $this->live_merchant_id;
         $this->sk = $this->is_sandbox ? $this->sandbox_sk : $this->live_sk;
@@ -151,15 +171,69 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
             $order->setState($state)->setStatus($state);
             $order->setExtOrderId($charge->id);
 
-            $_SESSION['pdf_url'] = $this->pdf_url_base.'/'.$this->merchant_id.'/'.$charge->id;
+            $pdf_url = $this->pdf_url_base.'/'.$this->merchant_id.'/'.$charge->id;
+            $_SESSION['pdf_url'] = $pdf_url;            
+            
+            $pdf_file = $this->handlePdf($pdf_url, $order->getIncrementId());
+            $this->sendEmail($pdf_file, $order);
+            
         } catch (\Exception $e) {
-            $this->debugData(['request' => $charge_request, 'exception' => $e->getMessage()]);
-            $this->_logger->error(__('Payment capturing error.'));
+            $this->debugData(['exception' => $e->getMessage()]);
+            $this->_logger->error(__( $e->getMessage()));
             throw new \Magento\Framework\Validator\Exception(__($this->error($e)));
         }
 
         $payment->setSkipOrderProcessing(true);
         return $this;
+    }
+    
+    public function sendEmail($pdf_file, $order) {
+        $email = $this->scope_config->getValue('trans_email/ident_support/email',ScopeInterface::SCOPE_STORE);
+        $name  = $this->scope_config->getValue('trans_email/ident_support/name',ScopeInterface::SCOPE_STORE);
+        $pdf = file_get_contents($pdf_file);        
+        $from = array('email' => $email, 'name' => $name);
+        $to = $order->getCustomerEmail();
+        $template_vars = array(
+            'title' => 'Instrucciones de pago | Orden #'.$order->getIncrementId()
+        );
+        
+        $this->logger->debug('#sendEmail', array('$pdf_path' => $pdf_file, '$from' => $from, '$to' => $to));                    
+        
+        try {            
+            $this->_transportBuilder
+                ->setTemplateIdentifier('openpay_spei_pdf_template')
+                ->setTemplateOptions(['area' => \Magento\Framework\App\Area::AREA_FRONTEND, 'store' => $this->_storeManager->getStore()->getId()])
+                ->setTemplateVars($template_vars)
+                ->addAttachment($pdf, 'instrucciones_pago.pdf', 'application/octet-stream')
+                ->setFrom($from)
+                ->addTo($to)
+                ->getTransport()
+                ->sendMessage();
+            return;
+        } catch (MailException $me) {            
+            $this->logger->error('#MailException', array('msg' => $me->getMessage()));                    
+            throw new \Magento\Framework\Exception\LocalizedException(__($me->getMessage()));
+        } catch (\Exception $e) {            
+            $this->logger->error('#Exception', array('msg' => $e->getMessage()));                    
+            throw new \Magento\Framework\Exception\LocalizedException(__($e->getMessage()));
+        }
+    }    
+    
+    private function handlePdf($url, $order_id) {
+        $pdfContent = file_get_contents($url);
+        $filePath = "/openpay/attachments/";
+        $pdfPath = $this->_directoryList->getPath('media') . $filePath;
+        $ioAdapter = $this->_file;
+        
+        if (!is_dir($pdfPath)) {            
+            $ioAdapter->mkdir($pdfPath, 0775);
+        }
+
+        $fileName = "payment_receipt_".$order_id.".pdf";
+        $ioAdapter->open(array('path' => $pdfPath));
+        $ioAdapter->write($fileName, $pdfContent, 0666);
+
+        return $pdfPath.$fileName;
     }
     
     /**
@@ -288,5 +362,10 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         return $is_secure;
     }
 
+    public function getOpenpayInstance() {
+        $openpay = \Openpay::getInstance($this->merchant_id, $this->sk);
+        \Openpay::setSandboxMode($this->is_sandbox);        
+        return $openpay;
+    }
 
 }
