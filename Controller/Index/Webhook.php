@@ -10,12 +10,8 @@
 namespace Openpay\Banks\Controller\Index;
 
 use Magento\Framework\App\Action\Context;
-use Magento\Framework\View\Result\PageFactory;
 use Openpay\Banks\Model\Payment as OpenpayPayment;
 
-use Magento\Framework\App\CsrfAwareActionInterface;
-use Magento\Framework\App\RequestInterface;
-use Magento\Framework\App\Request\InvalidRequestException;
 
 /**
  * Webhook class 
@@ -28,6 +24,14 @@ class Webhook extends \Magento\Framework\App\Action\Action
     protected $logger;
     protected $invoiceService;
 
+    /**
+     * 
+     * @param Context $context
+     * @param \Magento\Framework\App\Request\Http $request
+     * @param OpenpayPayment $payment
+     * @param \Psr\Log\LoggerInterface $logger_interface
+     * @param \Magento\Sales\Model\Service\InvoiceService $invoiceService
+     */
     public function __construct(
             Context $context,             
             \Magento\Framework\App\Request\Http $request,
@@ -81,35 +85,6 @@ class Webhook extends \Magento\Framework\App\Action\Action
         
         header('HTTP/1.1 200 OK');
         exit;        
-    }
-    
-    /**
-     * Create exception in case CSRF validation failed.
-     * Return null if default exception will suffice.
-     *
-     * @param RequestInterface $request
-     * @link https://magento.stackexchange.com/questions/253414/magento-2-3-upgrade-breaks-http-post-requests-to-custom-module-endpoint
-     *
-     * @return InvalidRequestException|null
-     * @SuppressWarnings(PMD.UnusedFormalParameter)
-     */
-    public function createCsrfValidationException(RequestInterface $request): ?InvalidRequestException
-    {
-        return null;
-    }
-
-    /**
-     * Perform custom request validation.
-     * Return null if default validation is needed.
-     *
-     * @param RequestInterface $request
-     *
-     * @return bool|null
-     * @SuppressWarnings(PMD.UnusedFormalParameter)
-     */
-    public function validateForCsrf(RequestInterface $request): ?bool
-    {
-        return true;
-    }
+    }        
 
 }
