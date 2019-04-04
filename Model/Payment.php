@@ -174,8 +174,8 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
             $pdf_url = $this->pdf_url_base.'/'.$this->merchant_id.'/'.$charge->id;
             $_SESSION['pdf_url'] = $pdf_url;            
             
-            $pdf_file = $this->handlePdf($pdf_url, $order->getIncrementId());
-            $this->sendEmail($pdf_file, $order);
+//            $pdf_file = $this->handlePdf($pdf_url, $order->getIncrementId());
+//            $this->sendEmail($pdf_file, $order);
             
         } catch (\Exception $e) {
             $this->debugData(['exception' => $e->getMessage()]);
