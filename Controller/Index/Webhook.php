@@ -17,10 +17,11 @@ use Magento\Framework\App\CsrfAwareActionInterface;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\Request\InvalidRequestException;
 
+
 /**
  * Webhook class 
  */
-class Webhook extends \Magento\Framework\App\Action\Action
+class Webhook extends \Magento\Framework\App\Action\Action implements CsrfAwareActionInterface
 {
     
     protected $request;
