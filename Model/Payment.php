@@ -10,6 +10,8 @@
 namespace Openpay\Banks\Model;
 
 use Magento\Store\Model\ScopeInterface;
+use Magento\Customer\Model\Customer;
+use Magento\Customer\Model\Session as CustomerSession;
 
 /**
  * Class Payment
@@ -33,6 +35,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     protected $scope_config;
     protected $openpay = false;
     protected $is_sandbox;
+    protected $country;
     protected $merchant_id = null;
     protected $sk = null;
     protected $deadline = 72;
@@ -48,6 +51,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     protected $_inlineTranslation;
     protected $_directoryList;
     protected $_file;
+    protected $iva = 0;
 
     /**
      * 
@@ -58,6 +62,15 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
      * @param \Magento\Payment\Helper\Data $paymentData
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
      * @param \Magento\Payment\Model\Method\Logger $logger
+     * @param \Openpay\Banks\Mail\Template\TransportBuilder $transportBuilder
+     * @param \Magento\Framework\Translate\Inline\StateInterface $inlineTranslation
+     * @param \Magento\Store\Model\StoreManagerInterface $storeManager
+     * @param \Psr\Log\LoggerInterface $logger_interface
+     * @param \Magento\Framework\App\Filesystem\DirectoryList $directoryList
+     * @param \Magento\Framework\Filesystem\Io\File $file
+     * @param Customer $customerModel
+     * @param CustomerSession $customerSession
+     * @param \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory
      * @param array $data
      */
     public function __construct(
@@ -74,6 +87,9 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Psr\Log\LoggerInterface $logger_interface,
         \Magento\Framework\App\Filesystem\DirectoryList $directoryList,
         \Magento\Framework\Filesystem\Io\File $file,
+            Customer $customerModel,
+            CustomerSession $customerSession,            
+            \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory,
         array $data = []
     ) {
         parent::__construct(
@@ -88,6 +104,10 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
             null,
             $data
         );
+        
+        $this->customerModel = $customerModel;
+        $this->customerSession = $customerSession;
+        $this->openpayCustomerFactory = $openpayCustomerFactory;
 
         $this->_file = $file;
         $this->_directoryList = $directoryList;
@@ -99,11 +119,13 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
 
         $this->is_active = $this->getConfigData('active');
         $this->is_sandbox = $this->getConfigData('is_sandbox');
+        $this->country = $this->getConfigData('country');
+        
         $this->sandbox_merchant_id = $this->getConfigData('sandbox_merchant_id');
         $this->sandbox_sk = $this->getConfigData('sandbox_sk');
         $this->live_merchant_id = $this->getConfigData('live_merchant_id');
-        $this->live_sk = $this->getConfigData('live_sk');
-        $this->deadline = $this->getConfigData('deadline_hours');        
+        $this->live_sk = $this->getConfigData('live_sk');        
+        $this->deadline = $this->country === 'MX' ? $this->getConfigData('deadline_hours') : null;
 
         $this->merchant_id = $this->is_sandbox ? $this->sandbox_merchant_id : $this->live_merchant_id;
         $this->sk = $this->is_sandbox ? $this->sandbox_sk : $this->live_sk;
@@ -117,7 +139,9 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
      * @return \Openpay\Banks\Model\Payment
      * @throws \Magento\Framework\Validator\Exception
      */
-    public function order(\Magento\Payment\Model\InfoInterface $payment, $amount) {
+    public function order(\Magento\Payment\Model\InfoInterface $payment, $amount) {        
+        unset($_SESSION['openpay_pse_redirect_url']);
+        
         /**
          * Magento utiliza el timezone UTC, por lo tanto sobreescribimos este 
          * por la configuración que se define en el administrador         
@@ -130,6 +154,8 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
 
         /** @var \Magento\Sales\Model\Order\Address $billing */
         $billing = $order->getBillingAddress();
+        
+        $this->logger->debug('#order', array('$order_id' => $order->getIncrementId(), '$status' => $order->getStatus(), '$amount' => $amount));        
 
         try {
 
@@ -139,43 +165,78 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                 'phone_number' => $billing->getTelephone(),
                 'email' => $order->getCustomerEmail()
             );
-
+            
             if ($this->validateAddress($billing)) {
-                $customer_data['address'] = array(
-                    'line1' => $billing->getStreetLine(1),
-                    'line2' => $billing->getStreetLine(2),
-                    'postal_code' => $billing->getPostcode(),
-                    'city' => $billing->getCity(),
-                    'state' => $billing->getRegion(),
-                    'country_code' => $billing->getCountryId()
+                $customer_data = $this->formatAddress($customer_data, $billing);
+            }     
+            
+            $this->logger->debug('#order', array('$customer_data' => $customer_data));        
+
+            
+            if ($this->country === 'MX') {
+                $due_date = date('Y-m-d\TH:i:s', strtotime('+ '.$this->deadline.' hours'));
+
+                $charge_request = array(
+                    'method' => 'bank_account',
+                    'amount' => $amount,
+                    'currency' => strtolower($order->getBaseCurrencyCode()),
+                    'description' => sprintf('ORDER #%s, %s', $order->getIncrementId(), $order->getCustomerEmail()),
+                    'order_id' => $order->getIncrementId(),
+                    'due_date' => $due_date,
+                    'customer' => $customer_data
                 );
+            } elseif($this->country === 'CO') {
+                $base_url = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);  // URL de la tienda   
+                
+                $charge_request = array(
+                    'country' => 'COL',
+                    'amount' => $amount,
+                    'currency' => strtolower($order->getBaseCurrencyCode()),
+                    'description' => sprintf('ORDER #%s, %s', $order->getIncrementId(), $order->getCustomerEmail()),
+                    'order_id' => $order->getIncrementId(),                    
+                    'customer' => $customer_data,
+                    'iva' => $this->iva,
+                    'redirect_url' => $base_url.'openpay/pse/confirm'
+                );                
             }
-
-            $due_date = date('Y-m-d\TH:i:s', strtotime('+ '.$this->deadline.' hours'));
-
-            $charge_request = array(
-                'method' => 'bank_account',
-                'amount' => $amount,
-                'description' => sprintf('ORDER #%s, %s', $order->getIncrementId(), $order->getCustomerEmail()),
-                'order_id' => $order->getIncrementId(),
-                'due_date' => $due_date,
-                'customer' => $customer_data
-            );
-
-            $openpay = \Openpay::getInstance($this->merchant_id, $this->sk);
-            \Openpay::setSandboxMode($this->is_sandbox);
-            $charge = $openpay->charges->create($charge_request);
-            $payment->setTransactionId($charge->id);
-
+            
+            $this->logger->debug('#order', array('$charge_request' => $charge_request));        
+            
+            // Realiza la transacción en Openpay
+            $charge = $this->makeOpenpayCharge($customer_data, $charge_request);  
+            $charge_id = '';
+            
+            if ($charge->id) {
+                $charge_id = $charge->id;
+            } elseif(!$charge->id && $charge->redirect_url) {
+                //$url_array = explode('/', $charge->redirect_url);
+                //$charge_id = $url_array[8];
+            }
+                        
+            $payment->setTransactionId($charge_id);
+            
+            $openpayCustomerFactory = $this->customerSession->isLoggedIn() ? $this->hasOpenpayAccount($this->customerSession->getCustomer()->getId()) : null;
+            $openpay_customer_id = $openpayCustomerFactory ? $openpayCustomerFactory->openpay_id : null;
+            
+            // Actualiza el estado de la orden
             $state = \Magento\Sales\Model\Order::STATE_NEW;
             $order->setState($state)->setStatus($state);
-            $order->setExtOrderId($charge->id);
-
-            $pdf_url = $this->pdf_url_base.'/'.$this->merchant_id.'/'.$charge->id;
-            $_SESSION['pdf_url'] = $pdf_url;            
             
-//            $pdf_file = $this->handlePdf($pdf_url, $order->getIncrementId());
-//            $this->sendEmail($pdf_file, $order);
+            // Registra el ID de la transacción de Openpay
+            $order->setExtOrderId($charge_id);
+            // Registra (si existe), el ID de Customer de Openpay
+            $order->setExtCustomerId($openpay_customer_id);
+            $order->save();  
+            
+            if ($this->country === 'MX') {
+                $pdf_url = $this->pdf_url_base.'/'.$this->merchant_id.'/'.$charge_id;
+                $_SESSION['pdf_url'] = $pdf_url;            
+
+//                $pdf_file = $this->handlePdf($pdf_url, $order->getIncrementId());
+//                $this->sendEmail($pdf_file, $order);
+            } elseif ($this->country === 'CO') {
+                $_SESSION['openpay_pse_redirect_url'] = $charge->redirect_url;
+            }           
             
         } catch (\Exception $e) {
             $this->debugData(['exception' => $e->getMessage()]);
@@ -185,6 +246,126 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
 
         $payment->setSkipOrderProcessing(true);
         return $this;
+    }
+    
+    private function makeOpenpayCharge($customer_data, $charge_request) {        
+        $openpay = $this->getOpenpayInstance();        
+
+        // Cargo para usuarios "invitados"
+        if (!$this->customerSession->isLoggedIn() && $this->country === 'MX') {            
+            return $openpay->charges->create($charge_request);
+        } elseif (!$this->customerSession->isLoggedIn() && $this->country === 'CO') {
+            return $openpay->pses->create($charge_request);
+        }        
+
+        // Se remueve el atributo de "customer" porque ya esta relacionado con una cuenta en Openpay
+        unset($charge_request['customer']); 
+
+        $openpay_customer = $this->retrieveOpenpayCustomerAccount($customer_data);    
+                
+        try {
+            // Cargo para usuarios con cuenta
+            if ($this->country === 'MX') {            
+                return $openpay_customer->charges->create($charge_request);            
+            } elseif ($this->country === 'CO') {
+                $this->logger->debug('#makeOpenpayCharge', array('pse' => true));        
+                return $openpay_customer->pses->create($charge_request);            
+            }        
+        } catch (\Exception $e) {             
+            $this->logger->critical('#makeOpenpayCharge', array('error' => $e->getMessage()));   
+            $this->logger->critical('#makeOpenpayCharge', array('getTraceAsString' => $e->getTraceAsString()));   
+            return false;
+        }        
+    }
+    
+    private function retrieveOpenpayCustomerAccount($customer_data) {
+        try {
+            $customerId = $this->customerSession->getCustomer()->getId();                
+            
+            $has_openpay_account = $this->hasOpenpayAccount($customerId);
+            if ($has_openpay_account === false) {
+                $openpay_customer = $this->createOpenpayCustomer($customer_data);
+                $this->logger->debug('$openpay_customer => '.$openpay_customer->id);
+
+                $data = [
+                    'customer_id' => $customerId,
+                    'openpay_id' => $openpay_customer->id
+                ];
+
+                // Se guarda en BD la relación
+                $openpay_customer_local = $this->openpayCustomerFactory->create();
+                $openpay_customer_local->addData($data)->save();                    
+            } else {
+                $openpay_customer = $this->getOpenpayCustomer($has_openpay_account->openpay_id);
+            }
+            
+            return $openpay_customer;
+        } catch (\Exception $e) {
+            throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
+        }
+    }
+    
+    private function createOpenpayCustomer($data) {
+        try {
+            $openpay = $this->getOpenpayInstance();
+            return $openpay->customers->add($data);            
+        } catch (\Exception $e) {
+            throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
+        }        
+    }
+    
+    private function hasOpenpayAccount($customer_id) {        
+        try {
+            $openpay_customer_local = $this->openpayCustomerFactory->create();
+            $response = $openpay_customer_local->fetchOneBy('customer_id', $customer_id);
+            return $response;
+        } catch (\Exception $e) {
+            throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
+        }  
+    }
+    
+    public function getOpenpayCustomer($openpay_customer_id) {
+        try {
+            $openpay = $this->getOpenpayInstance();
+            return $openpay->customers->get($openpay_customer_id);            
+        } catch (\Exception $e) {
+            throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
+        }        
+    }
+    
+    public function getOpenpayCharge($charge_id, $customer_id = null) {
+        try {                        
+            if ($customer_id === null) {                
+                $openpay = $this->getOpenpayInstance();
+                return $openpay->charges->get($charge_id);
+            }            
+            
+            $openpay_customer = $this->getOpenpayCustomer($customer_id);
+            return $openpay_customer->charges->get($charge_id);            
+        } catch (\Exception $e) {
+            throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
+        }
+    }
+    
+    private function formatAddress($customer_data, $billing) {
+        if ($this->country === 'MX') {
+            $customer_data['address'] = array(
+                'line1' => $billing->getStreetLine(1),
+                'line2' => $billing->getStreetLine(2),
+                'postal_code' => $billing->getPostcode(),
+                'city' => $billing->getCity(),
+                'state' => $billing->getRegion(),
+                'country_code' => $billing->getCountryId()
+            );
+        } else if ($this->country === 'CO') {
+            $customer_data['customer_address'] = array(
+                'department' => $billing->getRegion(),
+                'city' => $billing->getCity(),
+                'additional' => $billing->getStreetLine(1).' '.$billing->getStreetLine(2)
+            );
+        }
+        
+        return $customer_data;
     }
     
     public function sendEmail($pdf_file, $order) {
@@ -210,7 +391,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                 ->getTransport()
                 ->sendMessage();
             return;
-        } catch (MailException $me) {            
+        } catch (\Magento\Framework\Exception\MailException $me) {            
             $this->logger->error('#MailException', array('msg' => $me->getMessage()));                    
             throw new \Magento\Framework\Exception\LocalizedException(__($me->getMessage()));
         } catch (\Exception $e) {            
@@ -242,11 +423,14 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
      * @param string $currencyCode
      * @return bool
      */
-    public function canUseForCurrency($currencyCode) {
-        if (!in_array($currencyCode, $this->supported_currency_codes)) {
-            return false;
+    public function canUseForCurrency($currencyCode) {        
+        if ($this->country === 'MX') {
+            return in_array($currencyCode, $this->supported_currency_codes);
+        } else if ($this->country === 'CO') {
+            return $currencyCode == 'COP';
         }
-        return true;
+        
+        return false;
     }
     
     /**
@@ -360,6 +544,10 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         }
         
         return $is_secure;
+    }
+    
+    public function getCountry() {
+        return $this->country;
     }
 
     public function getOpenpayInstance() {
