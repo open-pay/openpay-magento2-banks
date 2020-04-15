@@ -18,6 +18,12 @@
                 <item name="openpay_banks" xsi:type="const">Openpay\Banks\Model\Payment::CODE</item>
             </argument>
         </arguments>
-    </virtualType>    
-        
+    </virtualType>            
+    <type name="Magento\Checkout\Model\CompositeConfigProvider">
+        <arguments>
+            <argument name="configProviders" xsi:type="array">
+                <item name="openpay_banks_config_provider" xsi:type="object">Openpay\Banks\Model\OpenpayConfigProvider</item>
+            </argument>
+        </arguments>
+    </type>    
 </config>
