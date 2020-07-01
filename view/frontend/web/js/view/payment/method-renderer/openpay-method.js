@@ -23,6 +23,9 @@ define(
             country: function() {
                 console.log('getCountry()', window.checkoutConfig.openpay_banks.country);
                 return window.checkoutConfig.openpay_banks.country;
+            },
+            getImagePse: function() {
+                return window.checkoutConfig.openpay_banks.image_pse;
             }
         });
     }

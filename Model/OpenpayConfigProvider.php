@@ -53,6 +53,7 @@ class OpenpayConfigProvider implements ConfigProviderInterface
         foreach ($this->methodCodes as $code) {
             if ($this->methods[$code]->isAvailable()) {
                 $config['openpay_banks']['country'] = $this->payment->getCountry();
+                $config['openpay_banks']['image_pse'] = $this->payment->getImagePath();
             }
         }
                 
