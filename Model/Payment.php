@@ -87,6 +87,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Psr\Log\LoggerInterface $logger_interface,
         \Magento\Framework\App\Filesystem\DirectoryList $directoryList,
         \Magento\Framework\Filesystem\Io\File $file,
+        \Magento\Framework\View\Asset\Repository $assetRepository,
             Customer $customerModel,
             CustomerSession $customerSession,            
             \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory,
@@ -108,6 +109,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         $this->customerModel = $customerModel;
         $this->customerSession = $customerSession;
         $this->openpayCustomerFactory = $openpayCustomerFactory;
+        $this->assetRepository = $assetRepository;
 
         $this->_file = $file;
         $this->_directoryList = $directoryList;
@@ -555,6 +557,20 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     
     public function getCountry() {
         return $this->country;
+    }
+
+    public function getImagePath()
+    {
+        $fileId = 'Openpay_Banks::images/logo_pse.png';
+        $params = [
+            'area' => 'frontend'
+        ];
+        $asset = $this->assetRepository->createAsset($fileId, $params);
+        try {
+            return $asset->getUrl();
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     public function getOpenpayInstance() {
