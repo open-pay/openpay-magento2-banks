@@ -536,7 +536,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
             )
         );
 
-        $openpay = \Openpay::getInstance($this->merchant_id, $this->sk);
+        $openpay = \Openpay::getInstance($this->merchant_id, $this->sk, $this->country);
         \Openpay::setSandboxMode($this->is_sandbox);
 
         $userAgent = "Openpay-MTO2".$this->country."/v2";
@@ -583,7 +583,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     }
 
     public function getOpenpayInstance() {
-        $openpay = \Openpay::getInstance($this->merchant_id, $this->sk);
+        $openpay = \Openpay::getInstance($this->merchant_id, $this->sk, $this->country);
         \Openpay::setSandboxMode($this->is_sandbox);
         
         $userAgent = "Openpay-MTO2".$this->country."/v2";
