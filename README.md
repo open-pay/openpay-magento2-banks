@@ -1,6 +1,6 @@
 # Openpay-Magento2-Banks
 
-Módulo para pagos vía SPEI con Openpay para Magento2 (soporte hasta v2.3.0)
+Módulo para pagos vía SPEI con Openpay para Magento2 (soporte hasta v2.3.5)
 
 
 ## Instalación
