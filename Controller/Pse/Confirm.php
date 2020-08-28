@@ -89,47 +89,50 @@ class Confirm extends \Magento\Framework\App\Action\Action
             }
             
             $this->logger->debug('#PSE', array('id' => $this->request->getParam('id'), 'status' => $charge->status));
-            if ($order && $charge->status != 'completed') {
-                $order->cancel();
-                $order->addStatusToHistory(\Magento\Sales\Model\Order::STATE_CANCELED, __('Autenticación de 3D Secure fallida.'));
-                $order->save();
-                $this->logger->debug('#PSE', array('msg' => 'Pago vía PSE fallido'));
-                                
-                return $this->resultPageFactory->create();        
-            }
-            
-            $status = \Magento\Sales\Model\Order::STATE_PROCESSING;            
-            $order->setExtOrderId($this->request->getParam('id')); // Registra el ID de la transacción de Openpay
-            $order->setState($status)->setStatus($status);
-            $order->setTotalPaid($charge->amount);  
-            $order->addStatusHistoryComment("Pago recibido exitosamente")->setIsCustomerNotified(true);            
-            $order->save();        
-            $requiresInvoice = true;
-            /** @var InvoiceCollection $invoiceCollection */
-            $invoiceCollection = $order->getInvoiceCollection();
-            if ( $invoiceCollection->count() > 0 ) {
-                /** @var Invoice $invoice */
-                foreach ($invoiceCollection as $invoice ) {
-                    if ( $invoice->getState() == Invoice::STATE_OPEN) {
-                        $invoice->setState(Invoice::STATE_PAID);
-                        $invoice->setTransactionId($charge->id);
-                        $invoice->pay()->save();
-                        $requiresInvoice = false;
-                        break;
+
+            if($order){
+                if ($charge->status == 'completed') {
+                    $status = \Magento\Sales\Model\Order::STATE_PROCESSING;            
+                    $order->setExtOrderId($this->request->getParam('id')); // Registra el ID de la transacción de Openpay
+                    $order->setState($status)->setStatus($status);
+                    $order->setTotalPaid($charge->amount);  
+                    $order->addStatusHistoryComment("Pago recibido exitosamente")->setIsCustomerNotified(true);            
+                    $order->save();        
+                    $requiresInvoice = true;
+                    /** @var InvoiceCollection $invoiceCollection */
+                    $invoiceCollection = $order->getInvoiceCollection();
+                    if ( $invoiceCollection->count() > 0 ) {
+                        /** @var Invoice $invoice */
+                        foreach ($invoiceCollection as $invoice ) {
+                            if ( $invoice->getState() == Invoice::STATE_OPEN) {
+                                $invoice->setState(Invoice::STATE_PAID);
+                                $invoice->setTransactionId($charge->id);
+                                $invoice->pay()->save();
+                                $requiresInvoice = false;
+                                break;
+                            }
+                        }
                     }
+                    if ( $requiresInvoice ) {
+                        $invoice = $this->_invoiceService->prepareInvoice($order);
+                        $invoice->setTransactionId($charge->id);
+                        // $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE);
+                        // $invoice->register();
+                        $invoice->pay()->save();
+                    }
+                    $payment = $order->getPayment();                                
+                    $payment->setAmountPaid($charge->amount);
+                    $payment->setIsTransactionPending(false);
+                    $payment->save();      
+                }else if($charge->status == 'cancelled' || $charge->status == 'failed'){
+                    $order->cancel();
+                    $order->addStatusToHistory(\Magento\Sales\Model\Order::STATE_CANCELED, __('Pago vía PSE fallido'));
+                    $order->save();
+                    $this->logger->debug('#PSE', array('msg' => 'Pago vía PSE fallido'));
+                                    
+                    return $this->resultPageFactory->create();   
                 }
             }
-            if ( $requiresInvoice ) {
-                $invoice = $this->_invoiceService->prepareInvoice($order);
-                $invoice->setTransactionId($charge->id);
-//            $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE);
-//            $invoice->register();
-                $invoice->pay()->save();
-            }
-            $payment = $order->getPayment();                                
-            $payment->setAmountPaid($charge->amount);
-            $payment->setIsTransactionPending(false);
-            $payment->save();
             
             $this->logger->debug('#PSE', array('redirect' => 'checkout/onepage/success'));
             return $this->resultRedirectFactory->create()->setPath('checkout/onepage/success');
