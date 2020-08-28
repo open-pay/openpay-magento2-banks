@@ -91,6 +91,11 @@ class Webhook extends \Magento\Framework\App\Action\Action
                     $order->setState($status)->setStatus($status);
                     $order->addStatusHistoryComment("Pago vencido")->setIsCustomerNotified(true);            
                     $order->save();
+                }else if($json->type == 'charge.failed' && $charge->status == 'failed'){
+                    $status = \Magento\Sales\Model\Order::STATE_CANCELED;
+                    $order->setState($status)->setStatus($status);
+                    $order->addStatusHistoryComment("Pago Cancelado")->setIsCustomerNotified(true);            
+                    $order->save();
                 }
             }
 
