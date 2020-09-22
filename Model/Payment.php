@@ -193,7 +193,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                 $base_url = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);  // URL de la tienda   
                 
                 $charge_request = array(
-                    'country' => 'COL',
+                    'method' => 'bank_account',
                     'amount' => $amount,
                     'currency' => strtolower($order->getBaseCurrencyCode()),
                     'description' => sprintf('ORDER #%s, %s', $order->getIncrementId(), $order->getCustomerEmail()),
@@ -238,8 +238,8 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
 
                 $pdf_file = $this->handlePdf($pdf_url, $order->getIncrementId());
                 $this->sendEmail($pdf_file, $order);
-            } elseif ($this->country === 'CO') {
-                $_SESSION['openpay_pse_redirect_url'] = $charge->redirect_url;
+            } elseif ($this->country === 'CO' && $charge->payment_method->type == 'redirect') {
+                $_SESSION['openpay_pse_redirect_url'] = $charge->payment_method->url;
             }           
             
         } catch (\Exception $e) {
@@ -256,11 +256,9 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         $openpay = $this->getOpenpayInstance();        
 
         // Cargo para usuarios "invitados"
-        if (!$this->customerSession->isLoggedIn() && $this->country === 'MX') {            
+        if (!$this->customerSession->isLoggedIn()) {            
             return $openpay->charges->create($charge_request);
-        } elseif (!$this->customerSession->isLoggedIn() && $this->country === 'CO') {
-            return $openpay->pses->create($charge_request);
-        }        
+        }     
 
         // Se remueve el atributo de "customer" porque ya esta relacionado con una cuenta en Openpay
         unset($charge_request['customer']); 
@@ -269,12 +267,9 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                 
         try {
             // Cargo para usuarios con cuenta
-            if ($this->country === 'MX') {            
-                return $openpay_customer->charges->create($charge_request);            
-            } elseif ($this->country === 'CO') {
-                $this->logger->debug('#makeOpenpayCharge', array('pse' => true));        
-                return $openpay_customer->pses->create($charge_request);            
-            }        
+            $this->logger->debug('#makeOpenpayCharge', array('bank_account' => true));          
+            return $openpay_customer->charges->create($charge_request);            
+                    
         } catch (\Exception $e) {             
             $this->logger->critical('#makeOpenpayCharge', array('error' => $e->getMessage()));   
             $this->logger->critical('#makeOpenpayCharge', array('getTraceAsString' => $e->getTraceAsString()));   
