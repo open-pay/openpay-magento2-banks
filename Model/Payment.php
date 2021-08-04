@@ -536,7 +536,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
 
         $webhooks = $openpay->webhooks->getList([]);
         $webhookCreated = $this->isWebhookCreated($webhooks, $uri);
-        if($webhookCreated){
+        if ($webhookCreated) {
             return $webhookCreated;
         }
 
@@ -609,9 +609,9 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         return $openpay;
     }
 
-    private function isWebhookCreated($webhooks, $uri){
+    private function isWebhookCreated($webhooks, $uri) {
         foreach ($webhooks as $webhook) {
-            if($webhook->__get('url') === $uri){
+            if ($webhook->__get('url') === $uri) {
                 return $webhook;
             }
         }
