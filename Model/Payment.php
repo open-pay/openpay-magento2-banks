@@ -92,7 +92,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Magento\Framework\View\Asset\Repository $assetRepository,
             Customer $customerModel,
             CustomerSession $customerSession,            
-            \Openpay\Banks\Cards\OpenpayCustomerFactory $openpayCustomerFactory,
+            \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory,
         array $data = []
     ) {
         parent::__construct(
