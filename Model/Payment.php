@@ -72,7 +72,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
      * @param \Magento\Framework\Filesystem\Io\File $file
      * @param Customer $customerModel
      * @param CustomerSession $customerSession
-     * @param \Openpay\Banks\Model\OpenpayCustomerFactory $openpayCustomerFactory
+     * @param \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory
      * @param array $data
      */
     public function __construct(
@@ -92,7 +92,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Magento\Framework\View\Asset\Repository $assetRepository,
             Customer $customerModel,
             CustomerSession $customerSession,            
-            \Openpay\Banks\Model\OpenpayCustomerFactory $openpayCustomerFactory,
+            \Openpay\Banks\Cards\OpenpayCustomerFactory $openpayCustomerFactory,
         array $data = []
     ) {
         parent::__construct(
