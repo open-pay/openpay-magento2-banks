@@ -13,6 +13,8 @@ use Magento\Store\Model\ScopeInterface;
 use Magento\Customer\Model\Customer;
 use Magento\Customer\Model\Session as CustomerSession;
 
+use Openpay\Data\Client as Openpay;
+
 /**
  * Class Payment
  *
@@ -553,11 +555,11 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     }
 
     public function getOpenpayInstance() {
-        $openpay = \Openpay::getInstance($this->merchant_id, $this->sk, $this->country);
-        \Openpay::setSandboxMode($this->is_sandbox);
+        $openpay = Openpay::getInstance($this->merchant_id, $this->sk, $this->country);
+        Openpay::setSandboxMode($this->is_sandbox);
         
         $userAgent = "Openpay-MTO2".$this->country."/v2";
-        \Openpay::setUserAgent($userAgent);
+        Openpay::setUserAgent($userAgent);
         
         return $openpay;
     }
