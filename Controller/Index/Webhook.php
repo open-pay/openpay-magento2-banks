@@ -24,14 +24,6 @@ class Webhook extends \Magento\Framework\App\Action\Action
     protected $logger;
     protected $invoiceService;
 
-    /**
-     * 
-     * @param Context $context
-     * @param \Magento\Framework\App\Request\Http $request
-     * @param OpenpayPayment $payment
-     * @param \Psr\Log\LoggerInterface $logger_interface
-     * @param \Magento\Sales\Model\Service\InvoiceService $invoiceService
-     */
     public function __construct(
             Context $context,             
             \Magento\Framework\App\Request\Http $request,
@@ -55,11 +47,20 @@ class Webhook extends \Magento\Framework\App\Action\Action
     public function execute() {
         $this->logger->debug('#webhook'); 
         try {
-            $body = file_get_contents('php://input');        
-            $json = json_decode($body);        
+            $body = file_get_contents('php://input');
+            $json = json_decode($body);
+            
+            /** Verification webhook process */
+            $isVerification = count(get_object_vars($json)) == 0;
+            if($isVerification){
+                $this->logger->debug('#webhook verification', [true]);
+                header('HTTP/1.1 200 OK');
+                exit; 
+            }
 
+            $this->logger->debug('#webhook body', ['body'=>$body]);
             $openpay = $this->payment->getOpenpayInstance();
-
+                    
             if(isset($json->transaction->customer_id)){
                 $customer = $openpay->customers->get($json->transaction->customer_id);
                 $charge = $customer->charges->get($json->transaction->id);
@@ -73,19 +74,19 @@ class Webhook extends \Magento\Framework\App\Action\Action
                 $order = $this->_objectManager->create('Magento\Sales\Model\Order');            
                 $order->loadByAttribute('ext_order_id', $charge->id);
 
-                if ($json->type == 'charge.succeeded' && $charge->status == 'completed') {
+                if($json->type == 'charge.succeeded' && $charge->status == 'completed'){
                     $status = \Magento\Sales\Model\Order::STATE_PROCESSING;
                     $order->setState($status)->setStatus($status);
                     $order->setTotalPaid($charge->amount);  
                     $order->addStatusHistoryComment("Pago recibido exitosamente")->setIsCustomerNotified(true);            
                     $order->save();
-    
+
                     $invoice = $this->invoiceService->prepareInvoice($order);        
                     $invoice->setTransactionId($charge->id);
                     $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE);
                     $invoice->register();
                     $invoice->save();
-
+                    
                 }else if($json->type == 'transaction.expired' && $charge->status == 'cancelled'){
                     $status = \Magento\Sales\Model\Order::STATE_CANCELED;
                     $order->setState($status)->setStatus($status);
@@ -97,14 +98,16 @@ class Webhook extends \Magento\Framework\App\Action\Action
                     $order->addStatusHistoryComment("Pago Cancelado")->setIsCustomerNotified(true);            
                     $order->save();
                 }
-            }
-
+                header('HTTP/1.1 200 OK');
+                exit; 
+            }       
         } catch (\Exception $e) {
-            $this->logger->error('#webhook', array('msg' => $e->getMessage()));                    
-        }                        
-        
-        header('HTTP/1.1 200 OK');
-        exit;        
-    }        
-
+            $this->logger->error('#webhook error', array('msg' => $e->getMessage()));
+            header('HTTP/1.1 500 Internal Server Error');
+            header( "Content-type: application/json" );
+            $jsonAnswer = array('error' => $e->getMessage(), 'trace' => $e->getTrace());
+            echo json_encode($jsonAnswer);
+            exit;                    
+        }                              
+    }
 }

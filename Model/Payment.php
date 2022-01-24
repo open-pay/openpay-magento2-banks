@@ -54,6 +54,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     protected $_directoryList;
     protected $_file;
     protected $iva = 0;
+    protected $openpayCustomerFactory;
 
     /**
      * 
@@ -72,7 +73,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
      * @param \Magento\Framework\Filesystem\Io\File $file
      * @param Customer $customerModel
      * @param CustomerSession $customerSession
-     * @param \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory
+     * @param \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory
      * @param array $data
      */
     public function __construct(
@@ -91,7 +92,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Magento\Framework\Filesystem\Io\File $file,
             Customer $customerModel,
             CustomerSession $customerSession,            
-            \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory,
+            \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory,
         array $data = []
     ) {
         parent::__construct(
@@ -290,8 +291,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                 ];
 
                 // Se guarda en BD la relación
-                $openpay_customer_local = $this->openpayCustomerFactory->create();
-                $openpay_customer_local->addData($data)->save();                    
+                $this->openpayCustomerFactory->addData($data)->save();                    
             } else {
                 $openpay_customer = $this->getOpenpayCustomer($has_openpay_account->openpay_id);
             }
@@ -313,8 +313,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     
     private function hasOpenpayAccount($customer_id) {        
         try {
-            $openpay_customer_local = $this->openpayCustomerFactory->create();
-            $response = $openpay_customer_local->fetchOneBy('customer_id', $customer_id);
+            $response = $this->openpayCustomerFactoryfetchOneBy('customer_id', $customer_id);
             return $response;
         } catch (\Exception $e) {
             throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
