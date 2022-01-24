@@ -52,9 +52,18 @@ class Webhook extends \Magento\Framework\App\Action\Action implements CsrfAwareA
     public function execute() {
         $this->logger->debug('#webhook'); 
         try {
-            $body = file_get_contents('php://input');        
-            $json = json_decode($body);        
+            $body = file_get_contents('php://input');
+            $json = json_decode($body);
+            
+            /** Verification webhook process */
+            $isVerification = count(get_object_vars($json)) == 0;
+            if($isVerification){
+                $this->logger->debug('#webhook verification', [true]);
+                header('HTTP/1.1 200 OK');
+                exit; 
+            }
 
+            $this->logger->debug('#webhook body', ['body'=>$body]);
             $openpay = $this->payment->getOpenpayInstance();
                     
             if(isset($json->transaction->customer_id)){
@@ -93,14 +102,18 @@ class Webhook extends \Magento\Framework\App\Action\Action implements CsrfAwareA
                     $order->setState($status)->setStatus($status);
                     $order->addStatusHistoryComment("Pago Cancelado")->setIsCustomerNotified(true);            
                     $order->save();
-                }  
+                }
+                header('HTTP/1.1 200 OK');
+                exit; 
             }       
         } catch (\Exception $e) {
-            $this->logger->error('#webhook', array('msg' => $e->getMessage()));                    
-        }                        
-        
-        header('HTTP/1.1 200 OK');
-        exit;        
+            $this->logger->error('#webhook error', array('msg' => $e->getMessage()));
+            header('HTTP/1.1 500 Internal Server Error');
+            header( "Content-type: application/json" );
+            $jsonAnswer = array('error' => $e->getMessage(), 'trace' => $e->getTrace());
+            echo json_encode($jsonAnswer);
+            exit;                    
+        }                              
     }
     
     /**
