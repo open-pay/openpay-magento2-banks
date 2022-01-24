@@ -54,6 +54,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     protected $_directoryList;
     protected $_file;
     protected $iva;
+    protected $openpayCustomerFactory;
 
     /**
      * 
@@ -72,7 +73,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
      * @param \Magento\Framework\Filesystem\Io\File $file
      * @param Customer $customerModel
      * @param CustomerSession $customerSession
-     * @param \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory
+     * @param \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory
      * @param array $data
      */
     public function __construct(
@@ -92,7 +93,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
         \Magento\Framework\View\Asset\Repository $assetRepository,
             Customer $customerModel,
             CustomerSession $customerSession,            
-            \Openpay\Cards\Model\OpenpayCustomerFactory $openpayCustomerFactory,
+            \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory,
         array $data = []
     ) {
         parent::__construct(
@@ -294,8 +295,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                 ];
 
                 // Se guarda en BD la relación
-                $openpay_customer_local = $this->openpayCustomerFactory->create();
-                $openpay_customer_local->addData($data)->save();                    
+                $this->openpayCustomerFactory->addData($data)->save();                    
             } else {
                 $openpay_customer = $this->getOpenpayCustomer($has_openpay_account->openpay_id);
                 if($openpay_customer === false){
@@ -303,8 +303,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
                     $this->logger->debug('#update openpay_customer', array('$openpay_customer_old' => $has_openpay_account->openpay_id, '$openpay_customer_old_new' => $openpay_customer->id)); 
 
                     // Se actualiza en BD la relación
-                    $openpay_customer_local = $this->openpayCustomerFactory->create();
-                    $openpay_customer_local_update = $openpay_customer_local->load($has_openpay_account->openpay_customer_id);
+                    $openpay_customer_local_update = $this->openpayCustomerFactory->load($has_openpay_account->openpay_customer_id);
                     $openpay_customer_local_update->setOpenpayId($openpay_customer->id);
                     $openpay_customer_local_update->save();
                 }
@@ -327,8 +326,7 @@ class Payment extends \Magento\Payment\Model\Method\AbstractMethod
     
     private function hasOpenpayAccount($customer_id) {        
         try {
-            $openpay_customer_local = $this->openpayCustomerFactory->create();
-            $response = $openpay_customer_local->fetchOneBy('customer_id', $customer_id);
+            $response = $this->openpayCustomerFactory->fetchOneBy('customer_id', $customer_id);
             return $response;
         } catch (\Exception $e) {
             throw new \Magento\Framework\Validator\Exception(__($e->getMessage()));
