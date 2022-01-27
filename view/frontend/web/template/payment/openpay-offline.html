@@ -4,6 +4,40 @@
  * See COPYING.txt for license details.
  */
 -->
+<style>
+    .payment-method__logo {
+        float: right;
+    }
+    .openpay__title {
+        border-bottom: 1px solid #cccccc; 
+        padding-bottom: 15px;
+        color: #0063A8;
+    }
+    .openpay__sub-title > a{
+        color: #11BFF8;
+    }
+    .openpay__title-steps {
+        margin-top: 25px; 
+        margin-bottom: 20px;
+        color: #0063A8;
+    }
+    .steps {
+        overflow: hidden;
+    }
+    .steps__item {
+        width: 30%; float: left; 
+        text-align: center; 
+        padding-left: 1.5%; 
+        padding-right: 1.5%;
+    }
+    .steps__image {
+        max-width: 75%;
+    }
+    .steps__text {
+        padding: 3px;
+        color: #0063A8;
+    }
+</style>
 <div class="payment-method" data-bind="css: {'_active': (getCode() == isChecked())}">
     <div class="payment-method-title field choice">
         <input type="radio"
@@ -11,6 +45,7 @@
                class="radio"
                data-bind="attr: {'id': getCode()}, value: getCode(), checked: isChecked, click: selectPaymentMethod, visible: isRadioButtonVisible()"/>
         <label data-bind="attr: {'for': getCode()}" class="label"><span data-bind="text: getTitle()"></span></label>
+        <img src="https://img.openpay.mx/plugins/openpay-logo_106x25.png" class="payment-method__logo">
     </div>
     <div class="payment-method-content">
         <!-- ko foreach: getRegion('messages') -->
@@ -22,34 +57,34 @@
             <!--/ko-->
         </div>
         
-        <div id="spei-container" class="fieldset" data-bind="visible: country() === 'MX'" style="margin-bottom: 20px;">
-            <div class="items check payable">            
-                <h3 style="border-bottom: 1px solid #cccccc; padding-bottom: 15px;">Pago con transferencia electrónica (SPEI)</h3>            
+        <div id="spei-container" class="openpay fieldset" data-bind="visible: country() === 'MX'" style="margin-bottom: 20px;">
+            <div class="items check payable">        
+                <h3 class="openpay__title">Pago con transferencia electrónica (SPEI)</h3>            
                 <img src="https://s11.postimg.cc/c5lz146pv/spei.png" alt="" style="max-width: 100%;" />
-                <p>
+                <p class="openpay__sub-title">
                     <a href="http://www.openpay.mx/bancos.html" target="_blank">Consulta los bancos soportados</a>
                 </p>           
-                <h4 style="margin-top: 25px; margin-bottom: 15px;">Pasos para tu pago por transferencia interbancaria</h4>
-                <div style="overflow: hidden;">                
-                    <div style="width: 30%; float: left; text-align: center; padding-left: 1.5%; padding-right: 1.5%;">
-                        <img src="https://s14.postimg.cc/wt10fdulp/step1.png" alt="" style="max-width: 100%;" />
-                        <p style="padding: 3px;">Haz clic en el botón de pago, tu compra quedará en espera de que realices tu pago.</p>
+                <h4 class="openpay__title-steps">Pasos para tu pago por transferencia interbancaria</h4>
+                <div class="steps">                
+                    <div class="steps__item">
+                        <img src="https://img.openpay.mx/plugins/file.svg" alt="" class="steps__image" />
+                        <p class="steps__text">Haz clic en el botón de pago, tu compra quedará en espera de que realices tu pago.</p>
                     </div>    
-                    <div style="width: 30%; float: left; text-align: center; padding-left: 1.5%; padding-right: 1.5%;">
-                        <img src="https://s15.postimg.cc/di3j47uxj/step_spei.png" alt="" style="max-width: 100%;" />
-                        <p style="padding: 3px;">Imprime o guarda tu recibo, sigue la guía para realizar el pago SPEI a través del portal de tu banco.</p>
+                    <div class="steps__item">
+                        <img src="https://img.openpay.mx/plugins/spei.svg" alt="" class="steps__image" />
+                        <p class="steps__text">Imprime o guarda tu recibo, sigue la guía para realizar el pago SPEI a través del portal de tu banco.</p>
                     </div>    
-                    <div style="width: 30%; float: left; text-align: center; padding-left: 1.5%; padding-right: 1.5%;">
-                        <img src="https://s13.postimg.cc/6c2yov3g3/step3.png" alt="" style="max-width: 100%;" />
-                        <p style="padding: 3px;">Inmediatamente después de recibir tu pago te enviaremos un correo electrónico con la confirmación de pago.</p>
+                    <div class="steps__item">
+                        <img src="https://img.openpay.mx/plugins/mail.svg" alt="" class="steps__image" />
+                        <p class="steps__text">Inmediatamente después de recibir tu pago te enviaremos un correo electrónico con la confirmación de pago.</p>
                     </div>    
                 </div>
             </div>
         </div>
         
-        <div id="pse-container" class="fieldset" data-bind="visible: country() === 'CO'" style="margin-bottom: 20px;">
+        <div id="pse-container" class="openpay fieldset" data-bind="visible: country() === 'CO'" style="margin-bottom: 20px;">
             <div class="items check payable">            
-                <h3 style="border-bottom: 1px solid #cccccc; padding-bottom: 15px;">Pagos PSE</h3>            
+                <h3 class="openpay__title">Pagos PSE</h3>            
                 <img data-bind="attr: { src: getImagePse() } " alt="" style="width: 100px; height: 100px; max-height: 100px;" />              
             </div>
         </div>                
@@ -76,4 +111,3 @@
         </div>
     </div>
 </div>
-        
