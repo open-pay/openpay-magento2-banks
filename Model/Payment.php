@@ -162,6 +162,8 @@ class Payment extends AbstractMethod
         /** @var \Magento\Sales\Model\Order\Address $billing */
         $billing = $order->getBillingAddress();
 
+        $origin_channel = "PLUGIN_MAGENTO";
+
         $this->logger->debug('#order', array('$order_id' => $order->getIncrementId(), '$status' => $order->getStatus(), '$amount' => $amount));
 
         try {
@@ -191,7 +193,8 @@ class Payment extends AbstractMethod
                     'description' => sprintf('ORDER #%s, %s', $order->getIncrementId(), $order->getCustomerEmail()),
                     'order_id' => $order->getIncrementId(),
                     'due_date' => $due_date,
-                    'customer' => $customer_data
+                    'customer' => $customer_data,
+                    'origin_channel' => $origin_channel
                 );
             } elseif($this->country === 'CO') {
                 $base_url = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);  // URL de la tienda
@@ -204,6 +207,7 @@ class Payment extends AbstractMethod
                     'order_id' => $order->getIncrementId(),
                     'customer' => $customer_data,
                     'iva' => $this->iva,
+                    'origin_channel' => $origin_channel,
                     'redirect_url' => $base_url.'openpay/pse/confirm'
                 );
             }
