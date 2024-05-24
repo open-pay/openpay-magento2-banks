@@ -251,7 +251,7 @@ class Payment extends AbstractMethod
             }
 
         } catch (\Exception $e) {
-            $this->debugData(['exception' => $e->getMessage()]);
+            $this->debugData($e->getMessage());
             $this->_logger->error(__( $e->getMessage()));
             throw new \Magento\Framework\Validator\Exception(__($this->error($e)));
         }
