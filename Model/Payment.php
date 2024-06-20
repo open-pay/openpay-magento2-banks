@@ -15,6 +15,7 @@ use Magento\Customer\Model\Customer;
 use Magento\Customer\Model\Session as CustomerSession;
 
 use Openpay\Data\Client as Openpay;
+use Openpay\Banks\Model\Utils\Currency;
 
 /**
  * Class Payment
@@ -56,6 +57,10 @@ class Payment extends AbstractMethod
     protected $_file;
     protected $iva;
     protected $openpayCustomerFactory;
+    /**
+     * @var Currency
+     */
+    protected $currencyUtils;
 
     /**
      *
@@ -76,6 +81,7 @@ class Payment extends AbstractMethod
      * @param CustomerSession $customerSession
      * @param \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory
      * @param array $data
+     * @param Currency $currencyUtils
      */
     public function __construct(
         \Magento\Framework\Model\Context $context,
@@ -95,6 +101,7 @@ class Payment extends AbstractMethod
             Customer $customerModel,
             CustomerSession $customerSession,
             \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory,
+            Currency $currencyUtils,
         array $data = []
     ) {
         parent::__construct(
@@ -126,6 +133,9 @@ class Payment extends AbstractMethod
         $this->is_active = $this->getConfigData('active');
         $this->is_sandbox = $this->getConfigData('is_sandbox');
         $this->country = $this->getConfigData('country');
+
+        $this->currencyUtils = $currencyUtils;
+        $this->supported_currency_codes = $this->currencyUtils->getSupportedCurrenciesByCountryCode($this->country);
 
         $this->sandbox_merchant_id = $this->getConfigData('sandbox_merchant_id');
         $this->sandbox_sk = $this->getConfigData('sandbox_sk');
@@ -447,6 +457,21 @@ class Payment extends AbstractMethod
 
         return $pdfPath.$fileName;
     }
+
+    public function validateSettings() {
+        $supportedCurrencies = $this->supported_currency_codes;
+
+        if($this->is_active){
+            if (!$this->currencyUtils->isSupportedCurrentCurrency($supportedCurrencies)) {
+                $currenciesAsString = implode(', ', $supportedCurrencies);
+                throw new \Magento\Framework\Validator\Exception(__('The '. $this->currencyUtils->getCurrentCurrency() .' currency is not suported, the supported currencies are: ' . $currenciesAsString));
+            }
+            return true;
+        }else{
+            return true;
+        }
+    }
+
     /**
      * @param Exception $e
      * @return string
@@ -490,13 +515,19 @@ class Payment extends AbstractMethod
      * @return mixed
      */
     public function createWebhook() {
-        $openpay = $this->getOpenpayInstance();
+        if($this->is_active){
+            $openpay = $this->getOpenpayInstance();
 
-        $base_url = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);
-        $uri = $base_url."openpay/index/webhook";
+            $base_url = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);
+            $uri = $base_url."openpay/index/webhook";
 
-        $webhooks = $openpay->webhooks->getList([]);
-        $webhookCreated = $this->isWebhookCreated($webhooks, $uri);
+            $webhooks = $openpay->webhooks->getList([]);
+            $webhookCreated = $this->isWebhookCreated($webhooks, $uri);
+        } else {
+            $webhookCreated = (object) [
+                "url" => ""
+            ];
+        }
         if ($webhookCreated) {
             return $webhookCreated;
         }
