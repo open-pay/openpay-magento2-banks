@@ -12,6 +12,7 @@
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">    
     <event name="admin_system_config_changed_section_payment">
+        <observer name="openpaybanks_observer_check_config" instance="Openpay\Banks\Observer\MerchantInfo"/>
         <observer name="openpay_observer_check_config" instance="Openpay\Banks\Observer\CreateWebhook"/>
     </event>
 </config>
