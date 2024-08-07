@@ -13,7 +13,7 @@ use Magento\Payment\Model\Method\AbstractMethod;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Customer\Model\Customer;
 use Magento\Customer\Model\Session as CustomerSession;
-
+use Magento\Framework\App\Request\Http;
 use Openpay\Data\Client as Openpay;
 use Openpay\Banks\Model\Utils\Currency;
 
@@ -36,7 +36,7 @@ class Payment extends AbstractMethod
     protected $_canRefund = false;
     protected $_canRefundInvoicePartial = false;
     protected $_isOffline = true;
-    protected $scope_config;
+    protected $scopeConfig;
     protected $openpay = false;
     protected $is_sandbox;
     protected $country;
@@ -57,6 +57,7 @@ class Payment extends AbstractMethod
     protected $_file;
     protected $iva;
     protected $openpayCustomerFactory;
+    protected $request;
     /**
      * @var Currency
      */
@@ -82,6 +83,7 @@ class Payment extends AbstractMethod
      * @param \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory
      * @param array $data
      * @param Currency $currencyUtils
+     * @param Http $request
      */
     public function __construct(
         \Magento\Framework\Model\Context $context,
@@ -102,6 +104,7 @@ class Payment extends AbstractMethod
             CustomerSession $customerSession,
             \Openpay\Banks\Model\OpenpayCustomer $openpayCustomerFactory,
             Currency $currencyUtils,
+            Http $request,
         array $data = []
     ) {
         parent::__construct(
@@ -117,6 +120,7 @@ class Payment extends AbstractMethod
             $data
         );
 
+        $this->request = $request;
         $this->customerModel = $customerModel;
         $this->customerSession = $customerSession;
         $this->openpayCustomerFactory = $openpayCustomerFactory;
@@ -128,14 +132,13 @@ class Payment extends AbstractMethod
         $this->_inlineTranslation = $inlineTranslation;
         $this->_storeManager = $storeManager;
         $this->_transportBuilder = $transportBuilder;
-        $this->scope_config = $scopeConfig;
+        $this->scopeConfig = $scopeConfig;
 
         $this->is_active = $this->getConfigData('active');
         $this->is_sandbox = $this->getConfigData('is_sandbox');
         $this->country = $this->getConfigData('country');
 
         $this->currencyUtils = $currencyUtils;
-        $this->supported_currency_codes = $this->currencyUtils->getSupportedCurrenciesByCountryCode($this->country);
 
         $this->sandbox_merchant_id = $this->getConfigData('sandbox_merchant_id');
         $this->sandbox_sk = $this->getConfigData('sandbox_sk');
@@ -163,7 +166,7 @@ class Payment extends AbstractMethod
          * Magento utiliza el timezone UTC, por lo tanto sobreescribimos este
          * por la configuración que se define en el administrador
          */
-        $store_tz = $this->scope_config->getValue('general/locale/timezone');
+        $store_tz = $this->scopeConfig->getValue('general/locale/timezone');
         date_default_timezone_set($store_tz);
 
         /** @var \Magento\Sales\Model\Order $order */
@@ -404,8 +407,8 @@ class Payment extends AbstractMethod
 
     public function sendEmail($pdf_file, $order) {
         $templateId = 'openpay_spei_pdf_template';
-        $email = $this->scope_config->getValue('trans_email/ident_support/email',ScopeInterface::SCOPE_STORE);
-        $name  = $this->scope_config->getValue('trans_email/ident_support/name',ScopeInterface::SCOPE_STORE);
+        $email = $this->scopeConfig->getValue('trans_email/ident_support/email',ScopeInterface::SCOPE_STORE);
+        $name  = $this->scopeConfig->getValue('trans_email/ident_support/name',ScopeInterface::SCOPE_STORE);
         $pdf = file_get_contents($pdf_file);
         $toEmail = $order->getCustomerEmail();
 
@@ -459,16 +462,27 @@ class Payment extends AbstractMethod
     }
 
     public function validateSettings() {
-        $supportedCurrencies = $this->supported_currency_codes;
+        $website_id = (int) $this->request->getParam('website', 0);
+        $is_active = $this->scopeConfig->getValue("payment/openpay_cards/active",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_merchant_id = $this->scopeConfig->getValue("payment/openpay_cards/sandbox_merchant_id",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_sk = $this->scopeConfig->getValue("payment/openpay_cards/sandbox_sk",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_country = $this->scopeConfig->getValue("payment/openpay_cards/country",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_is_sandbox = $this->scopeConfig->getValue("payment/openpay_cards/is_sandbox",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+            
+        $this->logger->debug( '#payment.validateSettings', array( 'is_active' => $is_active ) );
+        if($is_active){
+            $supportedCurrencies = $this->currencyUtils->getSupportedCurrenciesByCountryCode($current_country);
 
-        if($this->is_active){
             if (!$this->currencyUtils->isSupportedCurrentCurrency($supportedCurrencies)) {
                 $currenciesAsString = implode(', ', $supportedCurrencies);
                 throw new \Magento\Framework\Validator\Exception(__('The '. $this->currencyUtils->getCurrentCurrency() .' currency is not suported, the supported currencies are: ' . $currenciesAsString));
             }
-            return true;
-        }else{
-            return true;
+
+            $openpay = Openpay::getInstance($current_merchant_id, $current_sk, $current_country);
+            Openpay::setSandboxMode($current_is_sandbox);
+            $website_id = (int) $this->request->getParam('website', 0);
+            $base_url = $this->_storeManager->getStore($website_id)->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);
+        return;
         }
     }
 
@@ -515,19 +529,25 @@ class Payment extends AbstractMethod
      * @return mixed
      */
     public function createWebhook() {
-        if($this->is_active){
-            $openpay = $this->getOpenpayInstance();
-
-            $base_url = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);
-            $uri = $base_url."openpay/index/webhook";
-
+        $website_id = (int) $this->request->getParam('website', 0);
+        $is_active = $this->scopeConfig->getValue("payment/openpay_cards/active",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_merchant_id = $this->scopeConfig->getValue("payment/openpay_cards/sandbox_merchant_id",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_sk = $this->scopeConfig->getValue("payment/openpay_cards/sandbox_sk",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_country = $this->scopeConfig->getValue("payment/openpay_cards/country",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+        $current_is_sandbox = $this->scopeConfig->getValue("payment/openpay_cards/is_sandbox",\Magento\Store\Model\ScopeInterface::SCOPE_STORE,$website_id );
+         
+        if($is_active){
+            $base_url = $this->_storeManager->getStore($website_id)->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);
+            $openpay = Openpay::getInstance($current_merchant_id, $current_sk, $current_country);
+            $uri = $base_url."openpay/cards/webhook";
             $webhooks = $openpay->webhooks->getList([]);
             $webhookCreated = $this->isWebhookCreated($webhooks, $uri);
-        } else {
+        }else{
             $webhookCreated = (object) [
                 "url" => ""
             ];
         }
+
         if ($webhookCreated) {
             return $webhookCreated;
         }
@@ -585,11 +605,29 @@ class Payment extends AbstractMethod
         }
     }
 
-    public function getOpenpayInstance() {
-        $openpay = Openpay::getInstance($this->merchant_id, $this->sk, $this->country);
-        Openpay::setSandboxMode($this->is_sandbox);
+    public function getOpenpayInstance($merchant_id = null, $sk = null, $country = null, $is_sandbox = null) {
 
-        $userAgent = "Openpay-MTO2".$this->country."/v2";
+        if(is_null($merchant_id)){
+            $merchant_id = $this->merchant_id;
+        }
+
+        if(is_null($sk)){
+            $sk = $this->sk;
+        }
+
+        if(is_null($country)){
+            $country = $this->country;
+        }
+        
+        if(is_null($is_sandbox)){
+            $is_sandbox = $this->is_sandbox;
+        }
+        
+        $is_sandbox = $this->is_sandbox;
+
+        $openpay = Openpay::getInstance($merchant_id,$sk,$country);
+        Openpay::setSandboxMode($is_sandbox);
+        $userAgent = "Openpay-MTO2".$country."/v2";
         Openpay::setUserAgent($userAgent);
 
         return $openpay;
