@@ -11,7 +11,7 @@
 */
 -->
 <page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" layout="1column" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">    
-    <body>               
+    <body>
         <referenceContainer name="order.success.additional.info">
             <block class="Openpay\Banks\Block\Onepage\Success" name="onepage.success.openpay_banks" template="Openpay_Banks::onepage/success.phtml" cacheable="false"/>
         </referenceContainer>
