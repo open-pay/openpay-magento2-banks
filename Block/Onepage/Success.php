@@ -36,4 +36,8 @@ class Success extends Template
         $this->_isScopePrivate = true;
         $this->httpContext = $httpContext;
     }
+
+    public function getOrderId() {
+        return $this->_checkoutSession->getLastRealOrderId();
+    }
 }
