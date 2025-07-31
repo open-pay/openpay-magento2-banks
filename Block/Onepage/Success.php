@@ -37,7 +37,9 @@ class Success extends Template
         $this->httpContext = $httpContext;
     }
 
-    public function getOrderId() {
+    public function getOrderId()
+    {
         return $this->_checkoutSession->getLastRealOrderId();
     }
+
 }
