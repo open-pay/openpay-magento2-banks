@@ -11,9 +11,23 @@
 */
 -->
 <page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" layout="1column" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">    
-    <body>
+    <body>               
+        <referenceContainer name="checkout.success">
+            <container 
+                name="order.success.additional.info"
+                htmlTag="div" 
+                htmlClass="order-success-additional-info" 
+                after="-" />
+        </referenceContainer> 
         <referenceContainer name="order.success.additional.info">
-            <block class="Openpay\Banks\Block\Onepage\Success" name="onepage.success.openpay_banks" template="Openpay_Banks::onepage/success.phtml" cacheable="false"/>
+            <block class="Openpay\Banks\Block\Onepage\Success" 
+                name="checkout.success.openpay_banks" 
+                template="Openpay_Banks::success.phtml" 
+                cacheable="false"/>
+            <block class="Magento\Checkout\Block\Registration" 
+                name="checkout.registration" 
+                template="registration.phtml" 
+                cacheable="false"/>
         </referenceContainer>
     </body>
 </page>
