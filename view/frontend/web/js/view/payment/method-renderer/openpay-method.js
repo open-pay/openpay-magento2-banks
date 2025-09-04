@@ -39,11 +39,11 @@ define(
             },
 
             getSpeiIcon: function() {
-                return require.toUrl('Openpay_Banks/images/spei.svg');
+                return require.toUrl('https://img.openpay.mx/plugins/spei_logo.svg');
             },
 
             getPseIcon: function() {
-                return require.toUrl('Openpay_Banks/images/pse.svg');
+                return require.toUrl('https://img.openpay.mx/plugins/pse_logo.svg');
             },
 
             country: function() {
