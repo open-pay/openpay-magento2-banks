@@ -15,7 +15,7 @@ require([
         };
 
         // Si el país tiene un título definido, úsalo. Si no, deja el campo vacío o con un valor por defecto.
-        newTitle = titlesByCountry[countryValue] || 'Pago con Transferencia';
+        newTitle = titlesByCountry[countryValue] || 'Pago seguro con Transferencia';
         
         // Asignamos el nuevo valor al campo de texto
         titleField.val(newTitle);
