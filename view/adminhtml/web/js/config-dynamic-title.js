@@ -10,7 +10,7 @@ require([
 
         // Mapeo de países a títulos
         var titlesByCountry = {
-            'MX': 'Pago seguro con Transferencia',
+            'MX': 'Pago seguro con transferencia',
             'CO': 'Pago con PSE'
         };
 
