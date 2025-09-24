@@ -45,7 +45,18 @@
                class="radio"
                data-bind="attr: {'id': getCode()}, value: getCode(), checked: isChecked, click: selectPaymentMethod, visible: isRadioButtonVisible()"/>
         <label data-bind="attr: {'for': getCode()}" class="label"><span data-bind="text: getTitle()"></span></label>
-        <img src="https://img.openpay.mx/plugins/openpay-logo_106x25.png" class="payment-method__logo">
+        
+        <!-- ko if: isMx() -->
+        <div class="payment-icons-container">
+             <img width="40" data-bind="attr: { src: getSpeiIcon() }" alt="SPEI">
+        </div>
+        <!-- /ko -->
+
+        <!-- ko ifnot: isMx() -->
+        <div class="payment-icons-container">
+            <img width="40" data-bind="attr: { src: getPseIcon() }" alt="PSE">
+        </div>
+        <!-- /ko -->
     </div>
     <div class="payment-method-content">
         <!-- ko foreach: getRegion('messages') -->
